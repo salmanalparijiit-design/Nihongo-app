@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile containing study streak, XP, and daily target",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Google Auth UID of the user" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "streakCount": { "type": "integer", "description": "Consecutive days of study" },
+        "lastStudyDate": { "type": "string", "description": "Date of last study YYYY-MM-DD" },
+        "totalXp": { "type": "integer", "description": "Total learning experience points" },
+        "dailyGoalMinutes": { "type": "integer", "description": "Daily study target in minutes" },
+        "todayStudyMinutes": { "type": "integer", "description": "Minutes studied today" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp via serverTimestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Update timestamp via serverTimestamp" }
+      },
+      "required": ["userId", "displayName", "streakCount", "totalXp", "createdAt"]
+    },
+    "StudyProgress": {
+      "title": "StudyProgress",
+      "description": "Progress tracking for kanji and vocab flashcards with spaced repetition data",
+      "type": "object",
+      "properties": {
+        "itemId": { "type": "string", "description": "Unique identifier for kanji or vocab item" },
+        "userId": { "type": "string", "description": "Owner user ID" },
+        "type": { "type": "string", "enum": ["kanji", "vocab"], "description": "Type of item" },
+        "jlptLevel": { "type": "string", "enum": ["N5", "N4", "N3"], "description": "JLPT level" },
+        "masteryLevel": { "type": "integer", "description": "Mastery level 0 to 5" },
+        "reviewCount": { "type": "integer", "description": "Number of times reviewed" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Update timestamp" }
+      },
+      "required": ["itemId", "userId", "type", "jlptLevel", "masteryLevel", "createdAt"]
+    },
+    "TestResult": {
+      "title": "TestResult",
+      "description": "Historical results of JLPT practice exams",
+      "type": "object",
+      "properties": {
+        "testId": { "type": "string", "description": "Unique test run identifier" },
+        "userId": { "type": "string", "description": "Owner user ID" },
+        "jlptLevel": { "type": "string", "enum": ["N5", "N4", "N3"], "description": "JLPT level taken" },
+        "score": { "type": "integer", "description": "Score achieved" },
+        "maxScore": { "type": "integer", "description": "Maximum possible score" },
+        "passed": { "type": "boolean", "description": "Whether passing threshold was reached" },
+        "durationSeconds": { "type": "integer", "description": "Duration taken in seconds" },
+        "completedAt": { "type": "string", "format": "date-time", "description": "Test completion timestamp" }
+      },
+      "required": ["testId", "userId", "jlptLevel", "score", "maxScore", "passed", "completedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with streak, stats, and settings"
+    },
+    "/users/{userId}/progress/{progressId}": {
+      "schema": "StudyProgress",
+      "description": "Spaced repetition kanji and vocabulary progress"
+    },
+    "/users/{userId}/test_results/{testResultId}": {
+      "schema": "TestResult",
+      "description": "Records of simulated JLPT examination attempts"
+    }
+  }
+}

@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
+             data.streakCount is int && data.streakCount >= 0 &&
+             (!('lastStudyDate' in data) || (data.lastStudyDate is string && data.lastStudyDate.size() <= 32)) &&
+             data.totalXp is int && data.totalXp >= 0 &&
+             (!('dailyGoalMinutes' in data) || (data.dailyGoalMinutes is int && data.dailyGoalMinutes >= 0 && data.dailyGoalMinutes <= 1440)) &&
+             (!('todayStudyMinutes' in data) || (data.todayStudyMinutes is int && data.todayStudyMinutes >= 0 && data.todayStudyMinutes <= 1440));
+    }
+
+    function isValidStudyProgress(data) {
+      return data.itemId is string && data.itemId.size() > 0 && data.itemId.size() <= 128 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.type is string && (data.type == 'kanji' || data.type == 'vocab') &&
+             data.jlptLevel is string && (data.jlptLevel == 'N5' || data.jlptLevel == 'N4' || data.jlptLevel == 'N3') &&
+             data.masteryLevel is int && data.masteryLevel >= 0 && data.masteryLevel <= 5 &&
+             (!('reviewCount' in data) || (data.reviewCount is int && data.reviewCount >= 0));
+    }
+
+    function isValidTestResult(data) {
+      return data.testId is string && data.testId.size() > 0 && data.testId.size() <= 128 &&
+             data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.jlptLevel is string && (data.jlptLevel == 'N5' || data.jlptLevel == 'N4' || data.jlptLevel == 'N3') &&
+             data.score is int && data.score >= 0 &&
+             data.maxScore is int && data.maxScore > 0 &&
+             data.passed is bool &&
+             (!('durationSeconds' in data) || (data.durationSeconds is int && data.durationSeconds >= 0));
+    }
+
+    // User Profile
+    match /users/{userId} {
+      allow get: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       isValidId(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'streakCount', 'totalXp', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'email', 'streakCount', 'lastStudyDate', 'totalXp', 'dailyGoalMinutes', 'todayStudyMinutes', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp &&
+                       incoming().createdAt <= request.time &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'streakCount', 'lastStudyDate', 'totalXp', 'dailyGoalMinutes', 'todayStudyMinutes', 'updatedAt']);
+
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+
+      // Study Progress Subcollection
+      match /progress/{progressId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         isValidId(progressId) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['itemId', 'userId', 'type', 'jlptLevel', 'masteryLevel', 'createdAt']) &&
+                         incoming().keys().hasOnly(['itemId', 'userId', 'type', 'jlptLevel', 'masteryLevel', 'reviewCount', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp &&
+                         incoming().createdAt <= request.time &&
+                         isValidStudyProgress(incoming());
+
+        allow update: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidStudyProgress(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['masteryLevel', 'reviewCount', 'updatedAt']);
+
+        allow delete: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      // JLPT Test Results Subcollection
+      match /test_results/{testResultId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         request.auth.uid == userId &&
+                         isValidId(testResultId) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['testId', 'userId', 'jlptLevel', 'score', 'maxScore', 'passed', 'completedAt']) &&
+                         incoming().keys().hasOnly(['testId', 'userId', 'jlptLevel', 'score', 'maxScore', 'passed', 'durationSeconds', 'completedAt']) &&
+                         incoming().completedAt is timestamp &&
+                         incoming().completedAt <= request.time &&
+                         isValidTestResult(incoming());
+
+        allow update, delete: if false; // Test records are immutable audit logs
+      }
+    }
+  }
+}
